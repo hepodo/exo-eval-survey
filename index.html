@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Output Quality Evaluation</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --border: #2e3345;
+    --text: #e4e6f0;
+    --text-dim: #8b8fa3;
+    --accent: #6c7aff;
+    --accent-hover: #8490ff;
+    --accent-dim: rgba(108,122,255,0.15);
+    --success: #34d399;
+    --warn: #fbbf24;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    padding: 2rem;
+    background: linear-gradient(135deg, var(--surface), var(--surface2));
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  .header h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .header p { color: var(--text-dim); font-size: 0.95rem; }
+
+  /* ── Progress ── */
+  .progress-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 2rem;
+  }
+  .progress-step {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface2);
+    transition: background 0.3s;
+  }
+  .progress-step.done { background: var(--success); }
+  .progress-step.active { background: var(--accent); }
+
+  /* ── Sections ── */
+  .section {
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
+  .section.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .card h2 {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+  }
+  .card h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  /* ── Response Display ── */
+  .response-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .response-tab {
+    padding: 0.5rem 1.2rem;
+    border-radius: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  .response-tab:hover { border-color: var(--accent); color: var(--text); }
+  .response-tab.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .response-tab.scored {
+    background: rgba(52,211,153,0.1);
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .response-content {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 1.5rem;
+    max-height: 500px;
+    overflow-y: auto;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    border: 1px solid var(--border);
+  }
+  .response-content h1,
+  .response-content h2,
+  .response-content h3 {
+    color: var(--accent);
+    margin: 1rem 0 0.5rem;
+  }
+  .response-content h1 { font-size: 1.1rem; }
+  .response-content h2 { font-size: 1rem; }
+  .response-content ul, .response-content ol {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+  }
+  .response-content strong { color: var(--text); }
+
+  /* ── Rating Grid ── */
+  .rating-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .rating-section h3 {
+    margin-bottom: 1rem;
+    font-size: 1rem;
+  }
+  .dimension-row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0;
+  }
+  .dimension-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .dimension-desc {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .scale-buttons {
+    display: flex;
+    gap: 4px;
+  }
+  .scale-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .scale-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  .scale-btn.selected {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); }
+
+  .btn-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2rem;
+  }
+
+  /* ── Form Inputs ── */
+  select, input[type="text"], textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  select:focus, input:focus, textarea:focus { border-color: var(--accent); }
+  textarea { min-height: 80px; resize: vertical; }
+
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+  .form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+  }
+
+  /* ── Task prompt ── */
+  .task-prompt {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+  }
+  .task-prompt strong { color: var(--accent); }
+
+  /* ── Attention check ── */
+  .attention-check {
+    background: var(--surface);
+    border: 1px solid var(--warn);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  /* ── Authorship Grouping ── */
+  .grouping-section {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .grouping-section h3 { font-size: 1rem; margin-bottom: 0.4rem; }
+  .grouping-section p { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; }
+  .grouping-grid {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 0.6rem 1rem;
+    align-items: center;
+  }
+  .grouping-label { font-size: 0.9rem; font-weight: 600; }
+  .group-chips { display: flex; gap: 6px; }
+  .group-chip {
+    width: 36px; height: 36px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--text-dim); font-size: 0.85rem; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .group-chip:hover { border-color: var(--accent); color: var(--text); }
+  .group-chip.g1 { background: #2a3a5c; border-color: #4a7aff; color: #7aa8ff; }
+  .group-chip.g2 { background: #3a2a4c; border-color: #9a5aff; color: #c08aff; }
+  .group-chip.g3 { background: #2a3a3c; border-color: #4ac9a0; color: #7aeac0; }
+
+  /* ── Thank you ── */
+  .thank-you {
+    text-align: center;
+    padding: 3rem;
+  }
+  .thank-you h2 { font-size: 1.5rem; margin-bottom: 1rem; }
+  .thank-you .code-box {
+    display: inline-block;
+    background: var(--accent-dim);
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 2rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    font-family: monospace;
+    color: var(--accent);
+    margin: 1rem 0;
+    user-select: all;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .dimension-row {
+      grid-template-columns: 1fr;
+    }
+    .container { padding: 1rem; }
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>AI Output Quality Evaluation</h1>
+    <p>Please read and evaluate AI-generated responses on five quality dimensions.<br>
+       Estimated time: 15–20 minutes.</p>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-bar" id="progressBar"></div>
+
+  <!-- Section 0: Demographics -->
+  <div class="section active" id="section-demographics">
+    <div class="card">
+      <h2>About You</h2>
+      <div class="form-group">
+        <label>Professional domain</label>
+        <select id="domain">
+          <option value="">Select...</option>
+          <option value="technology">Technology / Engineering</option>
+          <option value="business">Business / Management</option>
+          <option value="academia">Academia / Research</option>
+          <option value="healthcare">Healthcare / Medical</option>
+          <option value="creative">Creative / Design</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Years of professional experience</label>
+        <select id="experience">
+          <option value="">Select...</option>
+          <option value="0-2">0–2 years</option>
+          <option value="3-5">3–5 years</option>
+          <option value="6-10">6–10 years</option>
+          <option value="11+">11+ years</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>How often do you use AI assistants (ChatGPT, Claude, Gemini, etc.)?</label>
+        <select id="aiUsage">
+          <option value="">Select...</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="rarely">Rarely / Never</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <div></div>
+        <button class="btn btn-primary" onclick="startEvaluation()">Begin Evaluation →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task sections (dynamically generated) -->
+  <div id="taskSections"></div>
+
+  <!-- Thank you -->
+  <div class="section" id="section-thankyou">
+    <div class="card thank-you">
+      <h2>✓ Thank you for your evaluation!</h2>
+      <p>Your responses have been submitted successfully.</p>
+      <p style="margin-top:1rem; color: var(--text-dim);">Please enter this completion code on Prolific:</p>
+      <div class="code-box" id="completionCode">LOADING...</div>
+      <p style="margin-top:1rem; color: var(--text-dim); font-size: 0.85rem;">
+        You can close this window after entering the code.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Configuration ──
+const PROLIFIC_COMPLETION_CODE = "C1A2B3D4";  // Set your actual code
+const GOOGLE_SHEETS_ENDPOINT = "";  // Set your Apps Script Web App URL
+
+// ── Task Prompts ──
+const TASK_PROMPTS = {
+  task1: "A mid-size Japanese SaaS company (50 employees, $5M ARR) wants to enter the US market. What is their single biggest risk, and what strategy would you recommend to address it?",
+  task2: "Propose a new service that combines public libraries with subscription-based business models. The service must be financially self-sustaining without government funding.",
+  task3: "Explain to a non-technical executive why fine-tuning a large language model is usually worse than prompt engineering for most business use cases.",
+  task4: "A hospital wants to use AI to triage emergency room patients by severity. What are the three most important ethical considerations, and how should each be addressed?",
+  task5: "Compare three approaches to reducing employee turnover: higher salaries, flexible work arrangements, and improved management training. Which is most cost-effective per dollar spent?"
+};
+
+const TASK_LABELS = {
+  task1: "Strategic Analysis",
+  task2: "Creative Ideation",
+  task3: "Technical Explanation",
+  task4: "Ethical Analysis",
+  task5: "Comparative Evaluation"
+};
+
+const DIMENSIONS = [
+  { id: "logical_structure", label: "Logical Structure", desc: "Reasoning is organized, sequenced, and easy to follow" },
+  { id: "originality", label: "Originality", desc: "Ideas go beyond the obvious" },
+  { id: "practical_utility", label: "Practical Utility", desc: "Reader can act on the output immediately" },
+  { id: "self_critique", label: "Self-Critique", desc: "Output identifies weaknesses in its own argument" },
+  { id: "claim_transparency", label: "Claim Transparency", desc: "Output distinguishes facts from estimates and opinions" }
+];
+
+const RESPONSE_LABELS = ["A", "B", "C", "D", "E", "F"];
+
+// ── State ──
+let participantId = "";
+let assignedTasks = [];
+let currentSection = 0;
+let totalSections = 0;
+let scores = {};
+let responses = {};
+
+// ── Latin Square Task Assignment ──
+function assignTasks() {
+  const params = new URLSearchParams(window.location.search);
+  participantId = params.get("PROLIFIC_PID") || "test_" + Math.random().toString(36).slice(2, 8);
+
+  // Simple hash to deterministic assignment
+  let hash = 0;
+  for (let i = 0; i < participantId.length; i++) {
+    hash = ((hash << 5) - hash) + participantId.charCodeAt(i);
+    hash |= 0;
+  }
+
+  const allTasks = ["task1", "task2", "task3", "task4", "task5"];
+  // Latin Square: assign 3 tasks based on participant hash
+  const groups = [
+    ["task1", "task2", "task4"],
+    ["task1", "task3", "task5"],
+    ["task2", "task3", "task4"],
+    ["task2", "task4", "task5"],
+    ["task1", "task3", "task4"],
+    ["task3", "task4", "task5"],
+    ["task1", "task2", "task5"],
+    ["task1", "task4", "task5"],
+    ["task2", "task3", "task5"],
+    ["task1", "task2", "task3"]
+  ];
+  const groupIndex = Math.abs(hash) % groups.length;
+  assignedTasks = groups[groupIndex];
+  totalSections = assignedTasks.length + 2; // demographics + tasks + thankyou
+}
+
+// ── Markdown to HTML (simple) ──
+function mdToHtml(md) {
+  let html = md
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^\* (.+)$/gm, '<li>$1</li>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/^\d+[\.\)] (.+)$/gm, '<li>$1</li>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/\n{2,}/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+  // Wrap consecutive <li> in <ul>
+  html = html.replace(/(<li>.*?<\/li>)(?:<br>)?(<li>)/g, '$1$2');
+  html = html.replace(/(<li>.*?<\/li>(?:<li>.*?<\/li>)*)/g, '<ul>$1</ul>');
+  return html;
+}
+
+// ── Build Task Sections ──
+function buildTaskSections() {
+  const container = document.getElementById("taskSections");
+  container.innerHTML = "";
+
+  assignedTasks.forEach((taskId, idx) => {
+    const sectionId = `section-${taskId}`;
+    const section = document.createElement("div");
+    section.className = "section";
+    section.id = sectionId;
+
+    const taskNum = taskId.replace("task", "");
+    const isLastTask = idx === assignedTasks.length - 1;
+
+    // Attention check on the second task
+    const attentionHtml = idx === 1 ? `
+      <div class="attention-check">
+        <div class="form-group">
+          <label>Quality check: Please select the number <strong>7</strong> below.</label>
+          <div class="scale-buttons">
+            ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+              `<button class="scale-btn" onclick="selectAttention(this, ${n})" data-val="${n}">${n}</button>`
+            ).join("")}
+          </div>
+        </div>
+      </div>` : "";
+
+    section.innerHTML = `
+      <div class="card">
+        <h2>Task ${idx + 1} of ${assignedTasks.length}: ${TASK_LABELS[taskId]}</h2>
+        <div class="task-prompt">
+          <strong>Prompt given to AI:</strong><br>
+          "${TASK_PROMPTS[taskId]}"
+        </div>
+
+        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">
+          Below are 6 AI-generated responses to this prompt.
+          Click each tab to read the response, then rate it on 5 dimensions (1 = very poor, 10 = excellent).
+        </p>
+
+        <div class="response-tabs" id="tabs-${taskId}">
+          ${RESPONSE_LABELS.map(l =>
+            `<button class="response-tab" onclick="showResponse('${taskId}', '${l}')" id="tab-${taskId}-${l}">Response ${l}</button>`
+          ).join("")}
+        </div>
+
+        <div class="response-content" id="content-${taskId}">
+          <p style="color: var(--text-dim);">← Click a response tab above to read it.</p>
+        </div>
+
+        <div class="rating-section" id="rating-${taskId}" style="display:none;">
+          <h3>Rate <span id="rating-label-${taskId}">Response _</span></h3>
+          ${DIMENSIONS.map(d => `
+            <div class="dimension-row">
+              <div>
+                <div class="dimension-label">${d.label}</div>
+                <div class="dimension-desc">${d.desc}</div>
+              </div>
+              <div class="scale-buttons">
+                ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+                  `<button class="scale-btn" onclick="selectScore('${taskId}', '${d.id}', ${n}, this)"
+                     id="btn-${taskId}-${d.id}-${n}">${n}</button>`
+                ).join("")}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+
+        <div class="grouping-section">
+          <h3>Authorship Grouping</h3>
+          <p>Some responses may come from the same AI system or style.
+             Group responses you think were written by the same "author."
+             Click a group number (1, 2, or 3) for each response. Same group = same perceived author.</p>
+          <div class="grouping-grid">
+            ${RESPONSE_LABELS.map(l => `
+              <div class="grouping-label">Resp. ${l}</div>
+              <div class="group-chips">
+                ${[1,2,3].map(g =>
+                  `<button class="group-chip" onclick="selectGroup('${taskId}','${l}',${g},this)" id="grp-${taskId}-${l}-${g}">${g}</button>`
+                ).join("")}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+
+        ${attentionHtml}
+
+        <div class="form-group" style="margin-top: 1.5rem;">
+          <label>Any comments on these responses? (optional)</label>
+          <textarea id="comment-${taskId}" placeholder="Optional comments..."></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="prevSection()">← Back</button>
+          <button class="btn btn-primary" id="next-${taskId}" onclick="${isLastTask ? 'submitAll()' : 'nextSection()'}" disabled>
+            ${isLastTask ? 'Submit Evaluation' : 'Next Task →'}
+          </button>
+        </div>
+      </div>
+    `;
+
+    container.appendChild(section);
+  });
+}
+
+// ── Navigation ──
+function showSection(index) {
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+  const sections = getAllSections();
+  if (sections[index]) sections[index].classList.add("active");
+  currentSection = index;
+  updateProgress();
+  window.scrollTo(0, 0);
+}
+
+function getAllSections() {
+  const demo = [document.getElementById("section-demographics")];
+  const tasks = assignedTasks.map(t => document.getElementById(`section-${t}`));
+  const thanks = [document.getElementById("section-thankyou")];
+  return [...demo, ...tasks, ...thanks];
+}
+
+function nextSection() { showSection(currentSection + 1); }
+function prevSection() { if (currentSection > 0) showSection(currentSection - 1); }
+
+function updateProgress() {
+  const bar = document.getElementById("progressBar");
+  bar.innerHTML = "";
+  for (let i = 0; i < totalSections; i++) {
+    const step = document.createElement("div");
+    step.className = "progress-step";
+    if (i < currentSection) step.classList.add("done");
+    else if (i === currentSection) step.classList.add("active");
+    bar.appendChild(step);
+  }
+}
+
+// ── Demographics ──
+function startEvaluation() {
+  const domain = document.getElementById("domain").value;
+  const exp = document.getElementById("experience").value;
+  const usage = document.getElementById("aiUsage").value;
+  if (!domain || !exp || !usage) {
+    alert("Please fill in all fields.");
+    return;
+  }
+  scores._demographics = { domain, experience: exp, aiUsage: usage };
+  nextSection();
+}
+
+// ── Response Display ──
+let currentResponse = {};
+
+function showResponse(taskId, label) {
+  currentResponse[taskId] = label;
+
+  // Update tabs
+  document.querySelectorAll(`#tabs-${taskId} .response-tab`).forEach(tab => {
+    tab.classList.remove("active");
+  });
+  document.getElementById(`tab-${taskId}-${label}`).classList.add("active");
+
+  // Show content
+  const content = document.getElementById(`content-${taskId}`);
+  const responseData = responses[taskId]?.[label] || "Loading...";
+  content.innerHTML = mdToHtml(responseData);
+
+  // Show rating
+  const ratingSection = document.getElementById(`rating-${taskId}`);
+  ratingSection.style.display = "block";
+  document.getElementById(`rating-label-${taskId}`).textContent = `Response ${label}`;
+
+  // Restore previously selected scores
+  DIMENSIONS.forEach(d => {
+    for (let n = 1; n <= 10; n++) {
+      const btn = document.getElementById(`btn-${taskId}-${d.id}-${n}`);
+      btn.classList.remove("selected");
+    }
+    const key = `${taskId}_${label}_${d.id}`;
+    if (scores[key]) {
+      document.getElementById(`btn-${taskId}-${d.id}-${scores[key]}`).classList.add("selected");
+    }
+  });
+}
+
+// ── Scoring ──
+function selectScore(taskId, dimId, value, btn) {
+  const label = currentResponse[taskId];
+  if (!label) return;
+
+  // Clear selection in this dimension
+  for (let n = 1; n <= 10; n++) {
+    document.getElementById(`btn-${taskId}-${dimId}-${n}`).classList.remove("selected");
+  }
+  btn.classList.add("selected");
+
+  const key = `${taskId}_${label}_${dimId}`;
+  scores[key] = value;
+
+  // Check if all dimensions scored for this response
+  const allDimsScored = DIMENSIONS.every(d => scores[`${taskId}_${label}_${d.id}`]);
+  if (allDimsScored) {
+    document.getElementById(`tab-${taskId}-${label}`).classList.add("scored");
+  }
+
+  // Check if all responses scored for this task
+  checkTaskComplete(taskId);
+}
+
+// ── Authorship Grouping ──
+let groupings = {};
+
+function selectGroup(taskId, label, groupNum, btn) {
+  [1,2,3].forEach(g => {
+    document.getElementById(`grp-${taskId}-${label}-${g}`).classList.remove('g1','g2','g3');
+  });
+  btn.classList.add(`g${groupNum}`);
+  groupings[`${taskId}_${label}_group`] = groupNum;
+  checkTaskComplete(taskId);
+}
+
+function checkTaskComplete(taskId) {
+  const allScored = RESPONSE_LABELS.every(label =>
+    DIMENSIONS.every(d => scores[`${taskId}_${label}_${d.id}`])
+  );
+  const allGrouped = RESPONSE_LABELS.every(label =>
+    groupings[`${taskId}_${label}_group`]
+  );
+  const nextBtn = document.getElementById(`next-${taskId}`);
+  if (nextBtn) nextBtn.disabled = !(allScored && allGrouped);
+}
+
+// ── Attention Check ──
+let attentionValue = null;
+function selectAttention(btn, val) {
+  document.querySelectorAll(".attention-check .scale-btn").forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
+  attentionValue = val;
+}
+
+// ── Submit ──
+async function submitAll() {
+  // Validate attention check
+  if (attentionValue !== null && attentionValue !== 7) {
+    // Still submit but flag it
+    scores._attention_check = "failed";
+  } else {
+    scores._attention_check = attentionValue === 7 ? "passed" : "not_shown";
+  }
+
+  // Collect comments and groupings
+  assignedTasks.forEach(taskId => {
+    const comment = document.getElementById(`comment-${taskId}`)?.value || "";
+    scores[`${taskId}_comment`] = comment;
+    RESPONSE_LABELS.forEach(label => {
+      scores[`${taskId}_${label}_group`] = groupings[`${taskId}_${label}_group`] || 0;
+    });
+  });
+
+  // Add metadata
+  scores._participant_id = participantId;
+  scores._assigned_tasks = assignedTasks.join(",");
+  scores._submitted_at = new Date().toISOString();
+  scores._user_agent = navigator.userAgent;
+
+  // Submit to Google Sheets
+  if (GOOGLE_SHEETS_ENDPOINT) {
+    try {
+      await fetch(GOOGLE_SHEETS_ENDPOINT, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(scores)
+      });
+    } catch (e) {
+      console.error("Submission error:", e);
+    }
+  } else {
+    console.log("No endpoint configured. Data:", JSON.stringify(scores, null, 2));
+  }
+
+  // Show completion
+  document.getElementById("completionCode").textContent = PROLIFIC_COMPLETION_CODE;
+  nextSection();
+}
+
+// ── Load Responses ──
+async function loadResponses() {
+  try {
+    const res = await fetch("responses.json");
+    responses = await res.json();
+  } catch (e) {
+    console.error("Failed to load responses:", e);
+    // Fallback: try loading from anonymized directory
+    for (const taskId of ["task1","task2","task3","task4","task5"]) {
+      responses[taskId] = {};
+      for (const label of RESPONSE_LABELS) {
+        try {
+          const r = await fetch(`../anonymized/${taskId}/response_${label.toLowerCase()}.md`);
+          responses[taskId][label] = await r.text();
+        } catch (_) {
+          responses[taskId][label] = "[Response not available]";
+        }
+      }
+    }
+  }
+}
+
+// ── Initialize ──
+async function init() {
+  assignTasks();
+  await loadResponses();
+  buildTaskSections();
+  updateProgress();
+}
+
+init();
+</script>
+</body>
+</html>
