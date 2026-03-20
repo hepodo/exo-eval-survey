@@ -777,6 +777,12 @@ async function submitAll() {
   scores._submitted_at = new Date().toISOString();
   scores._user_agent = navigator.userAgent;
 
+  // Always save to localStorage as backup
+  const backupKey = `survey_backup_${participantId}_${Date.now()}`;
+  try {
+    localStorage.setItem(backupKey, JSON.stringify(scores));
+  } catch (_) {}
+
   // Submit to Google Sheets
   if (GOOGLE_SHEETS_ENDPOINT) {
     try {
